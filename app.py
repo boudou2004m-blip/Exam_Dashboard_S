@@ -659,142 +659,129 @@ elif st.session_state.role == "admin":
          elif groups == []:
            st.error("No students found for this formation")
         else:
-           with st.spinner("Generating schedule..."):
-            student_exams = {}       
-            professor_exams = {}     
-            room_bookings = {}       
-            prof_total = {p.id: 0 for _, p in professors.iterrows()}
-            schedule = []
-            
-            for module in modules.to_dict("records"):
-                scheduled = False
+          with st.spinner("Generating schedule..."):
+    student_exams = {}       # key: student_id, value: set of slots
+    professor_exams = {}     # key: prof_id, value: set of slots
+    room_bookings = {}       # key: room_id, value: set of slots
+    prof_total = {p.id: 0 for _, p in professors.iterrows()}
+    schedule = []
+
+    for module in modules.to_dict("records"):
+        scheduled = False
+
+        for slot in slots:
+            exam_date = slot.date()
+            used_rooms = set()
+            used_profs = set()
+            temp = []
+
+            for gi, group in enumerate(groups, 1):
                 
-                for slot in slots:
-                    exam_date = slot.date()
-                    used_rooms = set()
-                    used_profs = set()
-                    temp = []
-
-                    for gi, group in enumerate(groups, 1):
-
-                        
-                        if any(exam_date in student_exams.get(s["id"], set()) for s in group):
-                            break
-
-                       
-                        room = None
-                        for _, r in rooms.iterrows():
-                            effective_capacity = min(r.capacity, 20) if "amphi" in str(r.name).lower() else r.capacity
-
-                            if effective_capacity >= len(group) and r.id not in used_rooms:
-                                
-                                if slot in room_bookings.get(r.id, set()):
-                                    continue
-                                room = r
-                                break
-
-                        if room is None:
-                            break
-
-                       
-                        dept_profs = [p for p in professors.to_dict("records") if p["dept_id"] == dept_id]
-                        other_profs = [p for p in professors.to_dict("records") if p["dept_id"] != dept_id]
-
-                        dept_profs.sort(key=lambda p: prof_total[p["id"]])
-                        other_profs.sort(key=lambda p: prof_total[p["id"]])
-
-                        sorted_profs = dept_profs + other_profs
-
-                        prof = None
-                        for p in sorted_profs:
-                            exams_for_prof = professor_exams.get(p["id"], {})
-
-                           
-                            if sum(1 for dt in exams_for_prof if dt.date() == exam_date) >= 3:
-                                continue
-
-                           
-                            if slot in exams_for_prof:
-                                continue
-
-                           
-                            if prof_total[p["id"]] - min(prof_total.values()) > 1:
-                                continue
-
-                            if p["id"] in used_profs:
-                                continue
-
-                            prof = p
-                            break
-
-                        if prof is None:
-                            break
-
-                        temp.append((gi, group, room, prof))
-                        used_rooms.add(room.id)
-                        used_profs.add(prof["id"])
-
-                 
-                    if len(temp) == len(groups):
-                        for gi, group, room, prof in temp:
-                           
-                            for s in group:
-                                student_exams.setdefault(s["id"], set()).add(exam_date)
-
-                            
-                            professor_exams.setdefault(prof["id"], {})
-                            professor_exams[prof["id"]][slot] = professor_exams[prof["id"]].get(slot, 0) + 1
-                            prof_total[prof["id"]] += 1
-
-                          
-                            room_bookings.setdefault(room.id, set()).add(slot)
-
-                            schedule.append({
-                                "Module": module["name"],
-                                "Formation": formation_choice,
-                                "Group": f"G{gi}",
-                                "Room": room.name,
-                                "Professor": f"{prof['first_name']} {prof['last_name']}",
-                                "Date": exam_date,
-                                "Time": slot.time(),
-                                "module_id": module["id"],
-                                "prof_id": prof["id"],
-                                "room_id": room.id,
-                                "date_time": slot
-                            })
-
-                        scheduled = True
+                # ❌ Check if any student has 1+ exam at this slot
+                conflict = False
+                for s in group:
+                    # max 3 exams per day
+                    exams_today = [d for d in student_exams.get(s["id"], set()) if d.date() == exam_date]
+                    if slot in student_exams.get(s["id"], set()) or len(exams_today) >= 3:
+                        conflict = True
                         break
+                if conflict:
+                    break
 
-                if not scheduled:
-                    st.warning(f"Could not schedule module: {module['name']}")
+                # ❌ Select room
+                room = None
+                for _, r in rooms.iterrows():
+                    effective_capacity = min(r.capacity, 20) if "amphi" in str(r.name).lower() else r.capacity
+                    if effective_capacity >= len(group) and r.id not in used_rooms:
+                        if slot in room_bookings.get(r.id, set()):
+                            continue
+                        room = r
+                        break
+                if room is None:
+                    break
 
-            
-            if schedule:
-               # st.success(f"Successfully scheduled {len(set(s['Module'] for s in schedule))} modules")
-                df = pd.DataFrame(schedule)
-                st.dataframe(df.drop(columns=["module_id", "prof_id", "room_id", "date_time"]), use_container_width=True)
+                # ❌ Select professor
+                dept_profs = [p for p in professors.to_dict("records") if p["dept_id"] == dept_id]
+                other_profs = [p for p in professors.to_dict("records") if p["dept_id"] != dept_id]
+                dept_profs.sort(key=lambda p: prof_total[p["id"]])
+                other_profs.sort(key=lambda p: prof_total[p["id"]])
+                sorted_profs = dept_profs + other_profs
 
-                try:
-                    with engine.begin() as conn:
-                        for row in schedule:
-                            conn.execute(
-                                text("""
-                                    INSERT INTO exams (module_id, prof_id, room_id, date_time)
-                                    VALUES (:mid, :pid, :rid, :dt)
-                                """),
-                                {"mid": row["module_id"], "pid": row["prof_id"], "rid": row["room_id"], "dt": row["date_time"]}
-                            )
-                        conn.execute(
-                            text("UPDATE formations SET validation_status='pending' WHERE id=:fid"),
-                            {"fid": formation_id}
-                        )
-                    st.success("Schedule waiting for generation!")
-                    st.balloons()
-                except Exception as e:
-                    st.error(f"Error saving schedule: {str(e)}")
-            else:
-                st.error("Could not generate schedule. Please adjust constraints.")
+                prof = None
+                for p in sorted_profs:
+                    exams_for_prof = professor_exams.get(p["id"], set())
+                    # max 3 exams per day
+                    exams_today = [d for d in exams_for_prof if d.date() == exam_date]
+                    if len(exams_today) >= 3:
+                        continue
+                    if slot in exams_for_prof:  # professor already has exam at this slot
+                        continue
+                    if p["id"] in used_profs:
+                        continue
+                    prof = p
+                    break
+
+                if prof is None:
+                    break
+
+                temp.append((gi, group, room, prof))
+                used_rooms.add(room.id)
+                used_profs.add(prof["id"])
+
+            # ✅ Schedule module if all groups have valid room+prof
+            if len(temp) == len(groups):
+                for gi, group, room, prof in temp:
+                    for s in group:
+                        student_exams.setdefault(s["id"], set()).add(slot)
+                    professor_exams.setdefault(prof["id"], set()).add(slot)
+                    prof_total[prof["id"]] += 1
+                    room_bookings.setdefault(room.id, set()).add(slot)
+
+                    schedule.append({
+                        "Module": module["name"],
+                        "Formation": formation_choice,
+                        "Group": f"G{gi}",
+                        "Room": room.name,
+                        "Professor": f"{prof['first_name']} {prof['last_name']}",
+                        "Date": exam_date,
+                        "Time": slot.time(),
+                        "module_id": module["id"],
+                        "prof_id": prof["id"],
+                        "room_id": room.id,
+                        "date_time": slot
+                    })
+                scheduled = True
+                break
+
+        if not scheduled:
+            st.warning(f"Could not schedule module: {module['name']}")
+
+    # ✅ Display schedule in same beautiful UI as approved
+    if schedule:
+        df = pd.DataFrame(schedule)
+        st.dataframe(df.drop(columns=["module_id", "prof_id", "room_id", "date_time"]), use_container_width=True)
+
+        try:
+            with engine.begin() as conn:
+                for row in schedule:
+                    conn.execute(
+                        text("""
+                            INSERT INTO exams (module_id, prof_id, room_id, date_time)
+                            VALUES (:mid, :pid, :rid, :dt)
+                        """),
+                        {"mid": row["module_id"], "pid": row["prof_id"], "rid": row["room_id"], "dt": row["date_time"]}
+                    )
+                conn.execute(
+                    text("UPDATE formations SET validation_status='pending' WHERE id=:fid"),
+                    {"fid": formation_id}
+                )
+            st.success("Schedule generated & waiting for validation!")
+            st.balloons()
+        except Exception as e:
+            st.error(f"Error saving schedule: {str(e)}")
+    else:
+        st.error("Could not generate schedule. Please adjust constraints.")
+
 
     except Exception as e:
         st.error(f"Error in admin dashboard: {str(e)}")
