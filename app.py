@@ -771,7 +771,7 @@ elif st.session_state.role == "admin":
 
             
             if schedule:
-                st.success(f"Successfully scheduled {len(set(s['Module'] for s in schedule))} modules")
+               # st.success(f"Successfully scheduled {len(set(s['Module'] for s in schedule))} modules")
                 df = pd.DataFrame(schedule)
                 st.dataframe(df.drop(columns=["module_id", "prof_id", "room_id", "date_time"]), use_container_width=True)
 
@@ -789,7 +789,7 @@ elif st.session_state.role == "admin":
                             text("UPDATE formations SET validation_status='pending' WHERE id=:fid"),
                             {"fid": formation_id}
                         )
-                    st.success("Schedule saved! Waiting for Doyen validation.")
+                    st.success("Schedule waiting for generation!")
                     st.balloons()
                 except Exception as e:
                     st.error(f"Error saving schedule: {str(e)}")
