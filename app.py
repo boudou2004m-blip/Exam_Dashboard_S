@@ -684,7 +684,7 @@ elif st.session_state.role == "admin":
                        
                         room = None
                         for _, r in rooms.iterrows():
-                            effective_capacity = min(r.capacity, 20) if "amphi" in r.name.lower() else r.capacity
+                            effective_capacity = min(r.capacity, 20) if "amphi" in str(r.name).lower() else r.capacity
 
                             if effective_capacity >= len(group) and r.id not in used_rooms:
                                 
