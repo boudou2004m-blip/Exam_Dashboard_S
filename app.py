@@ -658,9 +658,9 @@ elif st.session_state.role == "admin":
                 st.error("No students found for this formation")
             else:
                 with st.spinner("Generating schedule..."):
-                    student_exams = {}       # key: student_id, value: set of slots
-                    professor_exams = {}     # key: prof_id, value: set of slots
-                    room_bookings = {}       # key: room_id, value: set of slots
+                    student_exams = {}       
+                    professor_exams = {}     
+                    room_bookings = {}       
                     prof_total = {p.id: 0 for _, p in professors.iterrows()}
                     schedule = []
                     failed_modules = []
@@ -668,26 +668,25 @@ elif st.session_state.role == "admin":
                     for module in modules.to_dict("records"):
                         scheduled = False
 
-                        # Try each slot until we find one that works
                         for slot in slots:
                             exam_date = slot.date()
                             
-                            # Check if ALL groups can be scheduled at this slot
+                            
                             can_schedule_all = True
-                            temp_assignments = []  # Store (group_index, group, room, prof) tuples
+                            temp_assignments = []  
                             used_rooms = set()
                             used_profs = set()
 
                             for gi, group in enumerate(groups, 1):
-                                # 1. Check student conflicts
+                                
                                 student_conflict = False
                                 for s in group:
-                                    # Check if student already has exam at this exact slot
+                                   
                                     if slot in student_exams.get(s["id"], set()):
                                         student_conflict = True
                                         break
                                     
-                                    # Check if student already has 3 exams on this date
+                                  
                                     exams_today = [d for d in student_exams.get(s["id"], set()) if d.date() == exam_date]
                                     if len(exams_today) >= 3:
                                         student_conflict = True
@@ -697,18 +696,18 @@ elif st.session_state.role == "admin":
                                     can_schedule_all = False
                                     break
 
-                                # 2. Find available room
+                               
                                 room = None
                                 for _, r in rooms.iterrows():
-                                    # Skip if room already used for this slot in this module scheduling
+                                  
                                     if r.id in used_rooms:
                                         continue
                                     
-                                    # Skip if room is booked at this slot
+                                    
                                     if slot in room_bookings.get(r.id, set()):
                                         continue
                                     
-                                    # Check capacity (amphi limited to 20, others use actual capacity)
+                                  
                                     effective_capacity = min(r.capacity, 20) if "amphi" in str(r.name).lower() else r.capacity
                                     if effective_capacity >= len(group):
                                         room = r
@@ -718,27 +717,27 @@ elif st.session_state.role == "admin":
                                     can_schedule_all = False
                                     break
 
-                                # 3. Find available professor
-                                # Prioritize professors from same department
+                                
+                              
                                 dept_profs = [p for p in professors.to_dict("records") if p["dept_id"] == dept_id]
                                 other_profs = [p for p in professors.to_dict("records") if p["dept_id"] != dept_id]
                                 
-                                # Sort by workload (fewest exams first)
+                              
                                 dept_profs.sort(key=lambda p: prof_total[p["id"]])
                                 other_profs.sort(key=lambda p: prof_total[p["id"]])
                                 sorted_profs = dept_profs + other_profs
 
                                 prof = None
                                 for p in sorted_profs:
-                                    # Skip if professor already used for this slot in this module scheduling
+                                  
                                     if p["id"] in used_profs:
                                         continue
                                     
-                                    # Skip if professor already has exam at this slot
+                                   
                                     if slot in professor_exams.get(p["id"], set()):
                                         continue
                                     
-                                    # Skip if professor already has 3 exams on this date
+                                   
                                     exams_for_prof = professor_exams.get(p["id"], set())
                                     exams_today = [d for d in exams_for_prof if d.date() == exam_date]
                                     if len(exams_today) >= 3:
@@ -751,26 +750,26 @@ elif st.session_state.role == "admin":
                                     can_schedule_all = False
                                     break
 
-                                # Store this assignment temporarily
+                               
                                 temp_assignments.append((gi, group, room, prof))
                                 used_rooms.add(room.id)
                                 used_profs.add(prof["id"])
 
-                            # If all groups can be scheduled at this slot, commit the assignments
+                          
                             if can_schedule_all and len(temp_assignments) == len(groups):
                                 for gi, group, room, prof in temp_assignments:
-                                    # Update student exams
+                                   
                                     for s in group:
                                         student_exams.setdefault(s["id"], set()).add(slot)
                                     
-                                    # Update professor exams
+                                   
                                     professor_exams.setdefault(prof["id"], set()).add(slot)
                                     prof_total[prof["id"]] += 1
                                     
-                                    # Update room bookings
+                                   
                                     room_bookings.setdefault(room.id, set()).add(slot)
 
-                                    # Add to schedule
+                                    
                                     schedule.append({
                                         "Module": module["name"],
                                         "Formation": formation_choice,
@@ -786,25 +785,25 @@ elif st.session_state.role == "admin":
                                     })
                                 
                                 scheduled = True
-                                break  # Module scheduled, move to next module
+                                break 
                         
-                        # Track failed modules
+                       
                         if not scheduled:
                             failed_modules.append(module["name"])
 
-                    # Display results
+                  
                     if schedule:
                         df = pd.DataFrame(schedule)
                         st.dataframe(df.drop(columns=["module_id", "prof_id", "room_id", "date_time"]), use_container_width=True)
                         
                         if failed_modules:
-                            st.warning(f"⚠️ Could not schedule {len(failed_modules)} module(s): {', '.join(failed_modules)}")
+                            st.warning(f"Could not schedule {len(failed_modules)} module(s): {', '.join(failed_modules)}")
                             st.info("Try adding more time slots or rooms to accommodate all modules.")
                         else:
-                            st.success("✅ All modules scheduled successfully!")
+                            st.success("All modules scheduled successfully!")
                             st.balloons()
                         
-                        # Save to database
+                       
                         if st.button("Save Schedule to Database", type="primary"):
                             try:
                                 with engine.begin() as conn:
@@ -831,7 +830,7 @@ elif st.session_state.role == "admin":
                             except Exception as e:
                                 st.error(f"Error saving schedule: {str(e)}")
                     else:
-                        st.error("❌ Could not generate schedule. Please check:")
+                        st.error("Could not generate schedule. Please check:")
                         st.write("- Ensure there are enough time slots")
                         st.write("- Ensure there are enough rooms")
                         st.write("- Ensure there are enough professors")
