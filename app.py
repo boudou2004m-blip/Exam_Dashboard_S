@@ -838,7 +838,7 @@ elif st.session_state.role == "admin":
                                                          """),
                                                          {
                                                                 "eid": exam_id,
-                                                                "grp": exam["group_number"]
+                                                                "grp": exam["Group"]
                                                          }
                                                 )
 
