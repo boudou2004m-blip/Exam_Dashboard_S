@@ -656,7 +656,6 @@ elif st.session_state.role == "admin":
         if "failed_modules" not in st.session_state:
                 st.session_state.failed_modules = []
 
-
         # ---------- GENERATE BUTTON ----------
         if st.button("Generate Exam Schedule", type="primary", use_container_width=True):
 
@@ -670,12 +669,13 @@ elif st.session_state.role == "admin":
                         st.error("No students found for this formation")
 
                 else:
-                        with st.spinner("Generating schedule..."):
+                       with st.spinner("Generating schedule..."):
 
                                 student_exams = {}
                                 professor_exams = {}
                                 room_bookings = {}
                                 prof_total = {p.id: 0 for _, p in professors.iterrows()}
+                                formation_scheduled_dates = set()  # Track which dates already have exams for this formation
 
                                 schedule = []
                                 failed_modules = []
@@ -685,10 +685,13 @@ elif st.session_state.role == "admin":
 
                                         for slot in slots:
                                                 exam_date = slot.date()
+                                                
+                                                # Only one module per day for this formation
+                                                if exam_date in formation_scheduled_dates:
+                                                        continue  # This day already has an exam, try next slot
+                                                
                                                 can_schedule_all = True
                                                 temp_assignments = []
-                                                used_rooms = set()
-                                                used_profs = set()
 
                                                 for gi, group in enumerate(groups, 1):
 
@@ -711,14 +714,18 @@ elif st.session_state.role == "admin":
 
                                                         # ---- room assignment ----
                                                         room = None
-                                                        for _, r in rooms.iterrows():
-                                                                if r.id in used_rooms:
+                                                        # Sort rooms by capacity (smallest first for better utilization)
+                                                        sorted_rooms = sorted(rooms.to_dict("records"), key=lambda r: r["capacity"])
+                                                        
+                                                        for r in sorted_rooms:
+                                                                # Skip if room already used in this temp assignment
+                                                                if any(t[2]["id"] == r["id"] for t in temp_assignments):
                                                                         continue
-                                                                if slot in room_bookings.get(r.id, set()):
+                                                                # Skip if room is booked at this slot
+                                                                if slot in room_bookings.get(r["id"], set()):
                                                                         continue
-
-                                                                capacity = min(r.capacity, 20) if "amphi" in str(r.name).lower() else r.capacity
-                                                                if capacity >= len(group):
+                                                                # Check capacity
+                                                                if r["capacity"] >= len(group):
                                                                         room = r
                                                                         break
 
@@ -736,7 +743,8 @@ elif st.session_state.role == "admin":
 
                                                         prof = None
                                                         for p in sorted_profs:
-                                                                if p["id"] in used_profs:
+                                                                # Skip if professor already assigned in this temp assignment
+                                                                if any(t[3]["id"] == p["id"] for t in temp_assignments):
                                                                         continue
                                                                 if slot in professor_exams.get(p["id"], set()):
                                                                         continue
@@ -756,37 +764,40 @@ elif st.session_state.role == "admin":
                                                                 break
 
                                                         temp_assignments.append((gi, group, room, prof))
-                                                        used_rooms.add(room.id)
-                                                        used_profs.add(prof["id"])
 
-                                                if can_schedule_all:
+                                                # If we successfully found rooms and profs for ALL groups
+                                                if can_schedule_all and len(temp_assignments) == len(groups):
+                                                        # Commit all assignments
                                                         for gi, group, room, prof in temp_assignments:
                                                                 for s in group:
                                                                         student_exams.setdefault(s["id"], set()).add(slot)
 
                                                                 professor_exams.setdefault(prof["id"], set()).add(slot)
                                                                 prof_total[prof["id"]] += 1
-                                                                room_bookings.setdefault(room.id, set()).add(slot)
+                                                                room_bookings.setdefault(room["id"], set()).add(slot)
 
                                                                 schedule.append({
                                                                         "Module": module["name"],
                                                                         "Formation": formation_choice,
                                                                         "Group": f"G{gi}",
-                                                                        "Room": room.name,
+                                                                        "Room": room["name"],
                                                                         "Professor": f"{prof['first_name']} {prof['last_name']}",
                                                                         "Date": exam_date,
                                                                         "Time": slot.time(),
                                                                         "module_id": module["id"],
                                                                         "prof_id": prof["id"],
-                                                                        "room_id": room.id,
+                                                                        "room_id": room["id"],
                                                                         "date_time": slot
                                                                 })
 
+                                                        formation_scheduled_dates.add(exam_date)  # Mark this date as used
                                                         scheduled = True
                                                         break
 
                                         if not scheduled:
                                                 failed_modules.append(module["name"])
+
+
 
                                 # ---- SAVE TO SESSION ----
                                 st.session_state.generated_schedule = schedule
