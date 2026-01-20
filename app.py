@@ -832,7 +832,7 @@ elif st.session_state.role == "admin":
                                                 exam_id = result.fetchone()[0]  
 
                                             
-                                                grp_num = int(exam["Group"][1:])
+                                                grup_num = int(exam["Group"][1:])
                         
                                                 conn.execute(
                                                         text(""" 
