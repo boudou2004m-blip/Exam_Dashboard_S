@@ -630,20 +630,20 @@ elif st.session_state.role == "admin":
                                  """),
                                  {"fid": formation_id}
                              )
-                            
-                            conn.execute(
-                                text("DELETE FROM exams WHERE module_id IN (SELECT id FROM modules WHERE formation_id = :fid)"),
-                                {"fid": formation_id}
-                            )
-                            conn.execute(
-                                text("UPDATE formations SET validation_status='pending' WHERE id=:fid"),
-                                {"fid": formation_id}
-                            )
-                        st.success("Schedule deleted successfully")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error deleting schedule: {str(e)}")
-            st.stop()
+                             
+                             conn.execute(
+                                 text("DELETE FROM exams WHERE module_id IN (SELECT id FROM modules WHERE formation_id = :fid)"),
+                                 {"fid": formation_id}
+                             )
+                             conn.execute(
+                                 text("UPDATE formations SET validation_status='pending' WHERE id=:fid"),
+                                 {"fid": formation_id}
+                             )
+                         st.success("Schedule deleted successfully")
+                         st.rerun()
+                     except Exception as e:
+                         st.error(f"Error deleting schedule: {str(e)}")
+             st.stop()
         
         else:
             st.info("No schedule exists — ready to generate")
