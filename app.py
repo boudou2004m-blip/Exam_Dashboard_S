@@ -830,15 +830,18 @@ elif st.session_state.role == "admin":
                                                         }
                                                 )
                                                 exam_id = result.fetchone()[0]  
+
                                             
+                                                grp_num = int(exam["Group"][1:])
+                        
                                                 conn.execute(
-                                                        text("""
+                                                        text(""" 
                                                                 INSERT INTO exam_groups (exam_id, group_number)
                                                                 VALUES (:eid, :grp)
                                                          """),
                                                          {
                                                                 "eid": exam_id,
-                                                                "grp": exam["Group"]
+                                                                "grp": grup_num
                                                          }
                                                 )
 
