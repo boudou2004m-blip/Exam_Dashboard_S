@@ -816,19 +816,32 @@ elif st.session_state.role == "admin":
                         try:
                                 with engine.begin() as conn:
                                         for exam in st.session_state.generated_schedule:
-                                                conn.execute(
+                                                result = conn.execute(
                                                         text("""
-                                                                INSERT INTO exams (module_id, prof_id, room_id, date_time, group_number)
-                                                                VALUES (:mid, :pid, :rid, :dt, :grp)
+                                                                INSERT INTO exams (module_id, prof_id, room_id, date_time)
+                                                                VALUES (:mid, :pid, :rid, :dt)
+                                                                RETURNING id
                                                         """),
                                                         {
                                                                 "mid": exam["module_id"],
                                                                 "pid": exam["prof_id"],
                                                                 "rid": exam["room_id"],
                                                                 "dt": exam["date_time"],
-                                                                "grp": exam["Group"]
                                                         }
                                                 )
+                                                exam_id = result.fetchone()[0]  
+                                            
+                                                conn.execute(
+                                                        text("""
+                                                                INSERT INTO exam_groups (exam_id, group_number)
+                                                                VALUES (:eid, :grp)
+                                                         """),
+                                                         {
+                                                                "eid": exam_id,
+                                                                "grp": exam["group_number"]
+                                                         }
+                                                )
+
 
                                         conn.execute(
                                                 text("UPDATE formations SET validation_status='pending' WHERE id=:fid"),
