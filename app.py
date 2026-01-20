@@ -808,7 +808,7 @@ elif st.session_state.role == "admin":
                                 + ", ".join(st.session_state.failed_modules)
                         )
                 else:
-                        st.success("All modules scheduled successfully 🎉")
+                        st.success("All modules scheduled successfully")
                         st.balloons()
 
                 # ---------- SAVE BUTTON ----------
@@ -818,7 +818,7 @@ elif st.session_state.role == "admin":
                                         for exam in st.session_state.generated_schedule:
                                                 conn.execute(
                                                         text("""
-                                                                INSERT INTO exams (module_id, prof_id, room_id, exam_datetime, group_number)
+                                                                INSERT INTO exams (module_id, prof_id, room_id, date_time, group_number)
                                                                 VALUES (:mid, :pid, :rid, :dt, :grp)
                                                         """),
                                                         {
@@ -835,7 +835,7 @@ elif st.session_state.role == "admin":
                                                 {"fid": formation_id}
                                         )
 
-                                st.success("Schedule saved! Waiting for Doyen approval ✅")
+                                st.success("Schedule saved! Waiting for Doyen approval ")
                                 st.session_state.generated_schedule = None
                                 st.rerun()
 
