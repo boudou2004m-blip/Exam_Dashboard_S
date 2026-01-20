@@ -618,6 +618,19 @@ elif st.session_state.role == "admin":
                 if st.button("Delete Current Schedule", type="secondary"):
                     try:
                         with engine.begin() as conn:
+                             conn.execute(
+                                 text("""
+                                      DELETE FROM exam_groups
+                                      WHERE exam_id IN (
+                                          SELECT e.id
+                                          FROM exams e
+                                          JOIN modules m ON e.module_id = m.id
+                                          WHERE m.formation_id = :fid
+                                      )
+                                 """),
+                                 {"fid": formation_id}
+                             )
+                            
                             conn.execute(
                                 text("DELETE FROM exams WHERE module_id IN (SELECT id FROM modules WHERE formation_id = :fid)"),
                                 {"fid": formation_id}
